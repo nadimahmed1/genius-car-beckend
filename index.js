@@ -1,4 +1,5 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
@@ -9,7 +10,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+function verifyJWT(req, res, next) {
+    const authHeader = req.headers.authorization;
+    console.log(authHeader);
+    if (!authHeader) {
+        return res.status(401).send({ message: 'unAuthorized access token' })
+    }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECREAT, (err, decoded) => {
+        if (err) {
+            return res.status(403).send({ message: 'UnAuthorized access token' })
+        }
+        console.log(decoded);
+        req.decoded = decoded;
+        next();
+    })
 
+}
 
 const uri = `mongodb+srv://${process.env.DB_SERVER}:${process.env.DB_PASS}@cluster0.w1l0j5u.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
@@ -18,6 +35,7 @@ async function run() {
     try {
         await client.connect();
         const geniusCollection = client.db('geniusServer').collection('server');
+        const orderCollection = client.db('geniusServer').collection('order')
 
         app.get('/server', async (req, res) => {
             const query = {};
@@ -47,6 +65,38 @@ async function run() {
             const query = { _id: ObjectId(id) }
             const result = geniusCollection.deleteOne(query);
             res.send(result);
+        })
+
+        // orderPlace
+        app.post('/order', async (req, res) => {
+            const order = req.body;
+            const result = await orderCollection.insertOne(order);
+            res.send(result);
+        })
+        // 
+        app.get('/order', verifyJWT, async (req, res) => {
+            const decodedEmail = req.decoded.email;
+            const email = req.query.email;
+            if (email === decodedEmail) {
+                const query = { email: email };
+                const cursor = orderCollection.find(query);
+                const result = await cursor.toArray();
+                res.send(result);
+            }
+            else {
+                res.status(403).send({ message: 'forbidden' })
+            }
+
+
+        })
+
+        // 
+        app.post('/login', async (req, res) => {
+            const user = req.body;
+            const accessToken = jwt.sign(user, process.env.ACCESS_TOKEN_SECREAT, {
+                expiresIn: '1D'
+            })
+            res.send({ accessToken })
         })
     }
     finally {

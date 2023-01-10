@@ -51,6 +51,10 @@ async function run() {
             res.send(server);
 
         })
+        // faul
+        app.get('/service', (req, res) => {
+            res.send('service paice vai')
+        })
 
         // POST
         app.post('/server', async (req, res) => {
